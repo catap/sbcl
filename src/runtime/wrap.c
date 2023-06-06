@@ -524,7 +524,7 @@ int s_issock(mode_t mode)
 #endif /* !LISP_FEATURE_WIN32 */
 
 #ifdef LISP_FEATURE_UNIX
-#ifdef LISP_FEATURE_DARWIN
+#if defined(LISP_FEATURE_DARWIN) && (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1060)
 /* nanosleep() is not re-entrant on some versions of Darwin and is
  * reimplemented using the underlying syscalls.
  */

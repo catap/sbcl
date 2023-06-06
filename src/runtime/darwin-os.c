@@ -165,6 +165,8 @@ futex_wake(int *lock_word, int n)
 #endif
 #endif
 
+#if __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1060
+
 /* nanosleep() is not re-entrant on some versions of Darwin,
  * reimplement it using the underlying syscalls. */
 int
@@ -222,3 +224,5 @@ sb_nanosleep(time_t sec, int nsec) {
         }
     }
 }
+
+#endif
