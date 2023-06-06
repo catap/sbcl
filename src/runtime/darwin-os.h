@@ -36,10 +36,14 @@ typedef ucontext_t os_context_t;
 
 void darwin_init(void);
 
-#ifdef LISP_FEATURE_SB_THREAD
+#if defined(LISP_FEATURE_SB_THREAD) && (__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 1060) && !defined(__ppc__)
 #define USE_DARWIN_GCD_SEMAPHORES
 #include <dispatch/dispatch.h>
 typedef dispatch_semaphore_t os_sem_t;
+#elif defined LISP_FEATURE_SB_THREAD
+#define CANNOT_USE_POSIX_SEM_T
+#include <mach/semaphore.h>
+typedef semaphore_t os_sem_t;
 #endif
 
 #endif /* _DARWIN_OS_H */
