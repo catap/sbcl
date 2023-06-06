@@ -6,8 +6,14 @@
 
 
 #ifdef LISP_FEATURE_SB_THREAD
+#ifdef LISP_FEATURE_DARWIN
+#include <architecture/i386/table.h>
+#include <i386/user_ldt.h>
+#include <mach/mach_init.h>
+#else
 #include <machine/segments.h>
 #include <machine/sysarch.h>
+#endif /* LISP_FEATURE_DARWIN */
 #endif
 
 #if defined(LISP_FEATURE_FREEBSD) || defined(LISP_FEATURE_DRAGONFLY)
@@ -28,7 +34,11 @@
  * almost every line of code. It would be nice to find some way to
  * factor out the commonality better; failing that, it might be best
  * just to split this generic-BSD code into one variant for each BSD.
- */
+ *
+ * KLUDGE II: this split has begun with the addition of the Darwin BSD
+ * flavour, with the cross-architecture complications that this
+ * entails; unfortunately, currently the situation is worse, not
+ * better, than in the above paragraph. */
 
 #ifdef LISP_FEATURE_NETBSD
 #define _REG_eax _REG_EAX
@@ -80,7 +90,7 @@ os_context_fp_addr(os_context_t *context)
     return (int *)CONTEXT_ADDR_FROM_STEM(ebp);
 }
 
-#if defined(LISP_FEATURE_FREEBSD) || defined(__OpenBSD__) || defined(__DragonFly__)
+#if defined(LISP_FEATURE_FREEBSD) || defined(__OpenBSD__) || defined(LISP_FEATURE_DARWIN) || defined(__DragonFly__)
 int *
 os_context_sp_addr(os_context_t *context)
 {
@@ -107,6 +117,11 @@ os_flush_icache(os_vm_address_t address, os_vm_size_t length)
 {
 }
 
+/* Note: the Darwin versions of arch_os_thread_init found in
+ * x86-darwin-os.c
+*/
+#if !defined(LISP_FEATURE_DARWIN)
+
 #ifdef LISP_FEATURE_SB_THREAD
 
 void set_data_desc_size(struct segment_descriptor* desc, unsigned long size)
@@ -121,6 +136,9 @@ void set_data_desc_addr(struct segment_descriptor* desc, void* addr)
     desc->sd_hibase = ((unsigned int)addr & 0xff000000) >> 24;
 }
 
+#endif
+
+#ifdef LISP_FEATURE_SB_THREAD
 void
 arch_os_load_ldt(struct thread *thread)
 {
@@ -184,6 +202,7 @@ int arch_os_thread_cleanup(struct thread *thread) {
     return 1;                  /* success */
 }
 
+#endif /* !LISP_FEATURE_DARWIN */
 
 #if defined(LISP_FEATURE_FREEBSD)
 #if defined(LISP_FEATURE_RESTORE_TLS_SEGMENT_REGISTER_FROM_CONTEXT)
