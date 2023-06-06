@@ -171,4 +171,8 @@ void *os_dlsym_default(char *name); // Why not in 'os.h' ?
 #define NO_SANITIZE_MEMORY
 #endif
 
+#ifndef CLOCK_PROCESS_CPUTIME_ID
+#define CLOCK_PROCESS_CPUTIME_ID CLOCK_MONOTONIC
+#endif
+
 #endif /* _SBCL_RUNTIME_H_ */
