@@ -214,29 +214,50 @@ int sb_GetTID()
     return getthrid();
 }
 #elif defined __APPLE__
-// follows is what the apple pthreads implementation does...
-#define __TSD_MACH_THREAD_SELF 3
-#if defined(__x86_64__)
+
+// based on:
+//  - os/tsd.h from 10.13 and 10.9;
+//  - pthread_machdep.h from 10.5.
+
+#ifdef __LP64__
+#define _PTHREAD_TSD_OFFSET 0x60
+#else
+#define _PTHREAD_TSD_OFFSET 0x48
+#endif
+
 __attribute__((always_inline)) static inline uintptr_t _os_tsd_get_direct(unsigned long slot) {
+#if defined(__i386__) || defined(__x86_64__)
         uintptr_t ret;
         __asm__ volatile ("mov %%gs:%1, %0" : "=r" (ret) : "m" (*(void **)(slot * sizeof(void *))));
         return ret;
-}
-#else // __x86_64__
-__attribute__((always_inline)) static inline uintptr_t _os_tsd_get_direct(unsigned long slot) {
+#elif defined(__arm__)
         uintptr_t *base;
-#if defined(__arm__)
         __asm__("mrc p15, 0, %0, c13, c0, 3\n"
                 "bic %0, %0, #0x3\n" : "=r" (base));
-#elif defined(__arm64__)
-        __asm__ ("mrs %0, TPIDRRO_EL0" : "=r" (base));
-#endif
         return base[slot];
-}
+#elif defined(__arm64__)
+        uintptr_t *base;
+        __asm__ ("mrs %0, TPIDRRO_EL0" : "=r" (base));
+        return base[slot];
+#elif defined(__ppc__)
+        void **__pthread_tsd;
+        __asm__ volatile("mfspr %0, 259" : "=r" (__pthread_tsd));
+        return __pthread_tsd[slot + (_PTHREAD_TSD_OFFSET / sizeof(void *))];
+#elif defined(__ppc64__)
+        register void **__pthread_tsd __asm__ ("r13");
+        return __pthread_tsd[slot + (_PTHREAD_TSD_OFFSET / sizeof(void *))];
+#else // something else
+#error no pthread_getspecific_direct nor _os_tsd_get_direct implementation for this arch
 #endif
+}
+
 uint32_t sb_GetTID(void) {
         // actually a 32-bit id; truncation is harmless
-        return (uint32_t)_os_tsd_get_direct(__TSD_MACH_THREAD_SELF);
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101300
+        return (uint32_t)_os_tsd_get_direct(0); // __TSD_THREAD_SELF or _PTHREAD_TSD_SLOT_PTHREAD_SELF
+#else
+        return (uint32_t)_os_tsd_get_direct(3); // __TSD_MACH_THREAD_SELF
+#endif
 }
 #else
 #define sb_GetTID() 0
