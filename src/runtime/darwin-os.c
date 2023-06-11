@@ -77,7 +77,7 @@ void darwin_init(void)
 }
 
 
-#ifdef LISP_FEATURE_SB_THREAD
+#if defined LISP_FEATURE_SB_THREAD && defined USE_DARWIN_GCD_SEMAPHORES
 
 inline void
 os_sem_init(os_sem_t *sem, unsigned int value)
@@ -163,6 +163,60 @@ futex_wake(int *lock_word, int n)
     return 0;
 }
 #endif
+
+#elif defined LISP_FEATURE_SB_THREAD && defined CANNOT_USE_POSIX_SEM_T
+
+inline void
+os_sem_init(os_sem_t *sem, unsigned int value)
+{
+    if (KERN_SUCCESS!=semaphore_create(mach_task_self(), sem, SYNC_POLICY_FIFO, (int)value))
+        lose("os_sem_init(%p): %s", sem, strerror(errno));
+}
+
+inline void
+os_sem_wait(os_sem_t *sem, char *what)
+{
+    kern_return_t ret;
+  restart:
+    FSHOW((stderr, "%s: os_sem_wait(%p)\n", what, sem));
+    ret = semaphore_wait(*sem);
+    FSHOW((stderr, "%s: os_sem_wait(%p) => %s\n", what, sem,
+           KERN_SUCCESS==ret ? "ok" : strerror(errno)));
+    switch (ret) {
+    case KERN_SUCCESS:
+        return;
+        /* It is unclear just when we can get this, but a sufficiently
+         * long wait seems to do that, at least sometimes.
+         *
+         * However, a wait that long is definitely abnormal for the
+         * GC, so we complain before retrying.
+         */
+    case KERN_OPERATION_TIMED_OUT:
+        fprintf(stderr, "%s: os_sem_wait(%p): %s", what, sem, strerror(errno));
+        /* This is analogous to POSIX EINTR. */
+    case KERN_ABORTED:
+        goto restart;
+    default:
+        lose("%s: os_sem_wait(%p): %lu, %s",
+             what, sem, (long unsigned)ret, strerror(errno));
+    }
+}
+
+void
+os_sem_post(os_sem_t *sem, char *what)
+{
+    if (KERN_SUCCESS!=semaphore_signal(*sem))
+        lose("%s: os_sem_post(%p): %s", what, sem, strerror(errno));
+    FSHOW((stderr, "%s: os_sem_post(%p) ok\n", what, sem));
+}
+
+void
+os_sem_destroy(os_sem_t *sem)
+{
+    if (-1==semaphore_destroy(mach_task_self(), *sem))
+        lose("os_sem_destroy(%p): %s", sem, strerror(errno));
+}
+
 #endif
 
 #if !defined(LISP_FEATURE_USE_DARWIN_NANOSLEEP)
